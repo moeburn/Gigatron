@@ -28,7 +28,7 @@ volatile int count = 200;     // current rotary count
 
 
 DHT dht (pinDHT, DHT22);
-float dhtTemp, dhtHum, temperatureC;
+float dhtTemp, dhtHum, temperatureC, absHum;
 int encoder0Pos;
 int tempOffset = 0.5;
 
@@ -143,9 +143,14 @@ void loop() {
   if  (millis() - millisBlynk >= 30000)  //if it's been 30 seconds 
     {
         millisBlynk = millis();
-        Blynk.virtualWrite(V1, t1avg.mean());
-        Blynk.virtualWrite(V3, h1avg.mean());
+        float tempAvgHolder, humAvgHolder;
+        tempAvgHolder = t1avg.mean();
+        humAvgHolder = h1avg.mean();
+        absHum = (6.112 * pow(2.71828, ((17.67 * tempAvgHolder) / (tempAvgHolder + 243.5))) * humAvgHolder * 2.1674) / (273.15 + tempAvgHolder);
+        Blynk.virtualWrite(V1, tempAvgHolder);
         Blynk.virtualWrite(V2, t2avg.mean());
+        Blynk.virtualWrite(V3, humAvgHolder);
+        Blynk.virtualWrite(V4, absHum);
     }
 
       char t1buff[150];
