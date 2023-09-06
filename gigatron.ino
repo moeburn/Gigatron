@@ -13,15 +13,18 @@
 #include <DallasTemperature.h>
 #include <BlynkSimpleEsp32.h>
 #include <Average.h>
-#include "DHT.h"
+//#include "DHT.h"
 #include <FastLED.h>
+#include "Adafruit_SHT31.h"
+
+Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
 #define LED_PIN 18 //d7
 #define NUM_LEDS 1
 CRGB leds[NUM_LEDS];
 
 #define pinSSR 15
-#define pinDHT 19
+//#define pinDHT 19
 bool ssrState = false;
 float hysteresis = 1.1;
 
@@ -44,11 +47,11 @@ volatile int count = 200;     // current rotary count
          int halfcount;
 
 
-DHT dht (pinDHT, DHT22);
-float dhtTemp, dhtHum, temperatureC, absHum;
+//DHT dht (pinDHT, DHT22);
+float dhtTemp, dhtHum, shtTemp, shtHum, temperatureC, absHum;
 float setTemp = 21.0;
 int encoder0Pos;
-int tempOffset = 0.5;
+float tempOffset = 0.6;
 
 Average<float> t1avg(30);
 Average<float> t2avg(30);
@@ -83,6 +86,7 @@ BLYNK_WRITE(V16)
 
 void setup() {
 FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
+sht31.begin(0x44);
   pinMode(PinA, IPINMODE);
   pinMode(PinB, IPINMODE);
   pinMode(pushbutton, INPUT_PULLUP);
@@ -138,10 +142,10 @@ FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
   display.setFont(Monospaced_bold_16);
   //analogReadResolution(11); // Default of 12 is not very linear. Recommended to use 10 or 11 depending on needed resolution.
 //analogSetAttenuation(ADC_6db); 
-dht.begin ();
-      dhtTemp = dht.readTemperature();
+//dht.begin ();
+      //dhtTemp = dht.readTemperature();
      
-      dhtHum = dht.readHumidity();
+     // dhtHum = dht.readHumidity();
       sensors.requestTemperatures(); 
         temperatureC = sensors.getTempCByIndex(0);
 }
@@ -152,7 +156,7 @@ void doDisplay (){
 
       char t1buff[150];
       CStringBuilder sbt1(t1buff, sizeof(t1buff));
-      sbt1.print(dhtTemp, 1);
+      sbt1.print(shtTemp, 1);
       sbt1.print("°C");
 
       char t2buff[150];
@@ -180,7 +184,7 @@ void doDisplay (){
       display.setFont(ArialMT_Plain_10);
       display.drawString(6, 38, "^");
       //display.drawString(0, 20, h1buff);
-      
+      display.drawRect(0,0,64,48);
       //display.drawString(0, 30, String(halfcount));
       //display.setBrightness(halfcount);
       display.display();
@@ -191,11 +195,11 @@ void loop() {
   halfcount = count / 2;
       
   doDisplay();
-  if (dhtTemp < setTemp) {ssrState = true;
+  if ((shtTemp < setTemp) && (shtTemp > 0)) {ssrState = true;
   digitalWrite(pinSSR, HIGH);
   leds[0] = CRGB(100, 0, 0);
   }
-  if (dhtTemp > (setTemp + hysteresis)) {ssrState = false;
+  if (shtTemp > (setTemp + hysteresis)) {ssrState = false;
   digitalWrite(pinSSR, LOW);
   leds[0] = CRGB(0, 0, 0);
   }
@@ -232,36 +236,33 @@ void loop() {
   if  (millis() - millisTemp >= 5000)  //if it's been 30 seconds 
     {
       millisTemp = millis();
-      dhtTemp = dht.readTemperature();
-     
-      dhtHum = dht.readHumidity();
-      sensors.requestTemperatures(); 
-        temperatureC = sensors.getTempCByIndex(0);
+        shtTemp = sht31.readTemperature();
+        shtHum = sht31.readHumidity();
+      //sensors.requestTemperatures(); 
+      //temperatureC = sensors.getTempCByIndex(0);
 
     }
 
   if  (millis() - millisBlynk >= 30000)  //if it's been 30 seconds 
     {
         millisBlynk = millis();
-      dhtTemp = dht.readTemperature();
-      
-      dhtHum = dht.readHumidity();
-      sensors.requestTemperatures(); 
+        sensors.requestTemperatures(); 
         temperatureC = sensors.getTempCByIndex(0);
-        float tempAvgHolder, humAvgHolder;
-        tempAvgHolder = dhtTemp;
-        humAvgHolder = dhtHum;
-        absHum = (6.112 * pow(2.71828, ((17.67 * tempAvgHolder) / (tempAvgHolder + 243.5))) * humAvgHolder * 2.1674) / (273.15 + tempAvgHolder);
-              if ((dhtTemp > 0) && (dhtHum > 0)){
-        Blynk.virtualWrite(V1, tempAvgHolder);
-        
-        Blynk.virtualWrite(V3, humAvgHolder);
+        shtTemp = sht31.readTemperature();
+        shtHum = sht31.readHumidity();
+        absHum = (6.112 * pow(2.71828, ((17.67 * shtTemp) / (shtTemp + 243.5))) * shtHum * 2.1674) / (273.15 + shtTemp);
+              if ((shtTemp > 0) && (shtHum > 0)){
+        //Blynk.virtualWrite(V1, dhtTemp);
+        //Blynk.virtualWrite(V3, humAvgHolder);
+                Blynk.virtualWrite(V7, shtTemp);
+        Blynk.virtualWrite(V8, shtHum);
         Blynk.virtualWrite(V4, absHum);
               }
               
               Blynk.virtualWrite(V2, temperatureC);
               Blynk.virtualWrite(V5, setTemp);
               Blynk.virtualWrite(V6, ssrState);
+
     }
       
 }
