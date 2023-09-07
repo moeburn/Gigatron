@@ -27,7 +27,7 @@ CRGB leds[NUM_LEDS];
 //#define pinDHT 19
 bool ssrState = false;
 float hysteresis = 1.1;
-
+bool partymode = false;
 #define pushbutton 16 // Switch connection if available
 const int DEBOUNCE_DELAY = 50;   // the debounce time; increase if the output flickers
 // Variables will change:
@@ -75,7 +75,79 @@ int Vo;
 float R1 = 10000; // value of R1 on board
 float logR2, R2, T;
 float c1 = 0.001129148, c2 = 0.000234125, c3 = 0.0000000876741; 
+
+ uint8_t startHue = 0;
+ uint8_t deltaHue = 0;
+
+void rainbow2() {
+   for (int i = 0; i <= 255; i++) {
+  fill_rainbow (leds, NUM_LEDS, startHue, deltaHue);
+  FastLED.show();
+  delay(10);
+  startHue++;
+  deltaHue++;
+   }
+}
+
+void rainbow_wave(uint8_t thisSpeed, uint8_t deltaHue) {     // The fill_rainbow call doesn't support brightness levels.
+ 
+// uint8_t thisHue = beatsin8(thisSpeed,0,255);                // A simple rainbow wave.
+ uint8_t thisHue = beat8(thisSpeed,255);                     // A simple rainbow march.
+  
+ fill_rainbow(leds, NUM_LEDS, thisHue, deltaHue);            // Use FastLED's fill_rainbow routine.
+ 
+} // rainbow_wave()
+
 int zebraR, zebraG, zebraB, sliderValue;
+
+WidgetTerminal terminal(V0);
+
+BLYNK_WRITE(V0)
+{
+    if (String("help") == param.asStr()) 
+    {
+    terminal.println("==List of available commands:==");
+    terminal.println("wifi");
+    terminal.println("blink");
+    terminal.println("temp");
+     terminal.println("==End of list.==");
+    }
+        if (String("wifi") == param.asStr()) 
+    {
+        terminal.print("Connected to: ");
+        terminal.println(ssid);
+        terminal.print("IP address:");
+        terminal.println(WiFi.localIP());
+        terminal.print("Signal strength: ");
+        terminal.println(WiFi.RSSI());
+    }
+
+    if (String("blink") == param.asStr()) {
+      terminal.println("Blinking...");
+    partymode = true;
+    rainbow2();
+    }
+
+    if (String("temp") == param.asStr()) {
+        shtTemp = sht31.readTemperature();
+        shtHum = sht31.readHumidity();
+    sensors.requestTemperatures(); 
+        temperatureC = sensors.getTempCByIndex(0);
+        terminal.print("SHTTemp: ");
+        terminal.print(shtTemp);
+        terminal.print(", SHTHum: ");
+        terminal.print(shtHum);
+        terminal.print("ProbeTemp: ");
+        terminal.print(temperatureC);
+    }
+
+
+
+
+    terminal.flush();
+
+}
+
 
 BLYNK_WRITE(V16)
 {
@@ -85,6 +157,7 @@ BLYNK_WRITE(V16)
 }
 
 void setup() {
+setCpuFrequencyMhz(80);
 FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
 sht31.begin(0x44);
   pinMode(PinA, IPINMODE);
@@ -151,6 +224,7 @@ sht31.begin(0x44);
 }
 
 unsigned long millisBlynk, millisTemp;
+int buttoncounter;
 
 void doDisplay (){
 
@@ -173,6 +247,8 @@ void doDisplay (){
       display.clear();
       if (buttonstate) {
       display.drawCircle(60,3,3);
+      millisTemp = millis();
+      buttoncounter++;
       } 
       //display.setTextAlignment(TEXT_ALIGN_LEFT);
       //display.drawString(0, 0, "T:");
@@ -190,18 +266,25 @@ void doDisplay (){
       display.display();
 }
 
+
+
 void loop() {
 //leds[0] = CRGB(zebraR, zebraG, zebraB);
   halfcount = count / 2;
       
   doDisplay();
+  if (buttoncounter >= 9) 
+  {
+    partymode = true;
+    rainbow2();
+  }
   if ((shtTemp < setTemp) && (shtTemp > 0)) {ssrState = true;
-  digitalWrite(pinSSR, HIGH);
-  leds[0] = CRGB(100, 0, 0);
+    digitalWrite(pinSSR, HIGH);
+    leds[0] = CRGB(100, 0, 0);
   }
   if (shtTemp > (setTemp + hysteresis)) {ssrState = false;
-  digitalWrite(pinSSR, LOW);
-  leds[0] = CRGB(0, 0, 0);
+    digitalWrite(pinSSR, LOW);
+    if (!partymode) {leds[0] = CRGB(0, 0, 0);}
   }
 
 
@@ -233,14 +316,13 @@ void loop() {
     lastSteadyState = currentState;
   }
     
-  if  (millis() - millisTemp >= 5000)  //if it's been 30 seconds 
+  if  (millis() - millisTemp >= 10000)  //if it's been 30 seconds 
     {
       millisTemp = millis();
         shtTemp = sht31.readTemperature();
         shtHum = sht31.readHumidity();
-      //sensors.requestTemperatures(); 
-      //temperatureC = sensors.getTempCByIndex(0);
-
+        buttoncounter = 0;
+        partymode = false;
     }
 
   if  (millis() - millisBlynk >= 30000)  //if it's been 30 seconds 
