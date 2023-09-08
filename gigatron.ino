@@ -16,6 +16,13 @@
 //#include "DHT.h"
 #include <FastLED.h>
 #include "Adafruit_SHT31.h"
+#include "time.h"
+
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = -14400;  //Replace with your GMT offset (secs)
+const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
+int hours, mins, secs;
+
 
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
@@ -51,7 +58,7 @@ volatile int count = 200;     // current rotary count
 float dhtTemp, dhtHum, shtTemp, shtHum, temperatureC, absHum;
 float setTemp = 21.0;
 int encoder0Pos;
-float tempOffset = 0.6;
+float tempOffset = -1.5;
 
 Average<float> t1avg(30);
 Average<float> t2avg(30);
@@ -120,6 +127,7 @@ BLYNK_WRITE(V0)
         terminal.println(WiFi.localIP());
         terminal.print("Signal strength: ");
         terminal.println(WiFi.RSSI());
+        printLocalTime();
     }
 
     if (String("blink") == param.asStr()) {
@@ -131,6 +139,7 @@ BLYNK_WRITE(V0)
     if (String("temp") == param.asStr()) {
         shtTemp = sht31.readTemperature();
         shtHum = sht31.readHumidity();
+        shtTemp += tempOffset;
     sensors.requestTemperatures(); 
         temperatureC = sensors.getTempCByIndex(0);
         terminal.print("SHTTemp: ");
@@ -148,12 +157,37 @@ BLYNK_WRITE(V0)
 
 }
 
+BLYNK_WRITE(V40)
+{
+  float pinValue = param.asFloat(); // assigning incoming value from pin V1 to a variable
+  
+
+        setTemp = pinValue;
+        terminal.print("> setTemp changed to ");
+        terminal.println(setTemp);
+        terminal.flush();
+
+
+}
+
+
+
+
 
 BLYNK_WRITE(V16)
 {
      zebraR = param[0].asInt();
      zebraG = param[1].asInt();
      zebraB = param[2].asInt();
+}
+
+void printLocalTime() {
+  time_t rawtime;
+  struct tm* timeinfo;
+  time(&rawtime);
+  timeinfo = localtime(&rawtime);
+  terminal.println(asctime(timeinfo));
+  terminal.flush();
 }
 
 void setup() {
@@ -221,6 +255,27 @@ sht31.begin(0x44);
      // dhtHum = dht.readHumidity();
       sensors.requestTemperatures(); 
         temperatureC = sensors.getTempCByIndex(0);
+                shtTemp = sht31.readTemperature();
+        shtHum = sht31.readHumidity();
+        shtTemp += tempOffset;
+          configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
+  hours = timeinfo.tm_hour;
+  mins = timeinfo.tm_min;
+  secs = timeinfo.tm_sec;
+  terminal.println("**********Gigatron/Goliath/");
+  terminal.println("Smart Thermostat v1.0***********");
+
+  terminal.print("Connected to ");
+  terminal.println(ssid);
+  terminal.print("IP address: ");
+  terminal.println(WiFi.localIP());
+
+  printLocalTime();
+  terminal.flush();
+  Blynk.virtualWrite(V40, setTemp);
+  
 }
 
 unsigned long millisBlynk, millisTemp;
@@ -253,7 +308,7 @@ void doDisplay (){
       //display.setTextAlignment(TEXT_ALIGN_LEFT);
       //display.drawString(0, 0, "T:");
      // display.drawString(0, 10, "Set: ");
-     display.setFont(Monospaced_bold_16);
+     display.setFont(ArialMT_Plain_16);
       display.setTextAlignment(TEXT_ALIGN_CENTER);
       display.drawString(32, 0, t1buff);
       display.drawString(32, 24, t2buff);
@@ -321,8 +376,10 @@ void loop() {
       millisTemp = millis();
         shtTemp = sht31.readTemperature();
         shtHum = sht31.readHumidity();
+        shtTemp += tempOffset;
         buttoncounter = 0;
         partymode = false;
+        Blynk.virtualWrite(V40, setTemp);
     }
 
   if  (millis() - millisBlynk >= 30000)  //if it's been 30 seconds 
@@ -333,6 +390,7 @@ void loop() {
         shtTemp = sht31.readTemperature();
         shtHum = sht31.readHumidity();
         absHum = (6.112 * pow(2.71828, ((17.67 * shtTemp) / (shtTemp + 243.5))) * shtHum * 2.1674) / (273.15 + shtTemp);
+        shtTemp += tempOffset;
               if ((shtTemp > 0) && (shtHum > 0)){
         //Blynk.virtualWrite(V1, dhtTemp);
         //Blynk.virtualWrite(V3, humAvgHolder);
@@ -344,6 +402,7 @@ void loop() {
               Blynk.virtualWrite(V2, temperatureC);
               Blynk.virtualWrite(V5, setTemp);
               Blynk.virtualWrite(V6, ssrState);
+              
 
     }
       
@@ -363,4 +422,5 @@ void pinChangeISR() {
       setTemp -= 0.05;}
   }
   abOld = abNew;        // Save new state
+  Blynk.virtualWrite(V40, setTemp);
 }
