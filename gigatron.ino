@@ -23,6 +23,9 @@ const long gmtOffset_sec = -14400;  //Replace with your GMT offset (secs)
 const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
 int hours, mins, secs;
 
+bool haschanged = false;
+
+
 
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
@@ -56,7 +59,7 @@ volatile int count = 200;     // current rotary count
 
 //DHT dht (pinDHT, DHT22);
 float dhtTemp, dhtHum, shtTemp, shtHum, temperatureC, absHum;
-float setTemp = 21.0;
+float setTemp = 20.0;
 int encoder0Pos;
 float tempOffset = -1.5;
 
@@ -161,10 +164,13 @@ BLYNK_WRITE(V40)
 {
   float pinValue = param.asFloat(); // assigning incoming value from pin V1 to a variable
   
-
+        
         setTemp = pinValue;
-        terminal.print("> setTemp changed to ");
-        terminal.println(setTemp);
+        Blynk.virtualWrite(V5, setTemp);
+        terminal.print("> Temp set to ");
+        terminal.print(setTemp);
+        terminal.print(" at ");
+        printLocalTime();
         terminal.flush();
 
 
@@ -246,7 +252,7 @@ sht31.begin(0x44);
   Serial.println("HTTP server sharted");
   delay(2000);
   display.clear();
-  display.setFont(Monospaced_bold_16);
+
   //analogReadResolution(11); // Default of 12 is not very linear. Recommended to use 10 or 11 depending on needed resolution.
 //analogSetAttenuation(ADC_6db); 
 //dht.begin ();
@@ -308,7 +314,7 @@ void doDisplay (){
       //display.setTextAlignment(TEXT_ALIGN_LEFT);
       //display.drawString(0, 0, "T:");
      // display.drawString(0, 10, "Set: ");
-     display.setFont(ArialMT_Plain_16);
+     display.setFont(SansSerif_bold_16);
       display.setTextAlignment(TEXT_ALIGN_CENTER);
       display.drawString(32, 0, t1buff);
       display.drawString(32, 24, t2buff);
@@ -370,6 +376,12 @@ void loop() {
     // save the the last steady state
     lastSteadyState = currentState;
   }
+
+  if (haschanged) {
+            Blynk.virtualWrite(V40, setTemp);
+        Blynk.virtualWrite(V5, setTemp);
+        haschanged = false;
+  }
     
   if  (millis() - millisTemp >= 10000)  //if it's been 30 seconds 
     {
@@ -380,6 +392,7 @@ void loop() {
         buttoncounter = 0;
         partymode = false;
         Blynk.virtualWrite(V40, setTemp);
+        Blynk.virtualWrite(V5, setTemp);
     }
 
   if  (millis() - millisBlynk >= 30000)  //if it's been 30 seconds 
@@ -408,6 +421,8 @@ void loop() {
       
 }
 
+
+
 void pinChangeISR() {
   static int icount;
   enum { upMask = 0x66, downMask = 0x99 };
@@ -422,5 +437,5 @@ void pinChangeISR() {
       setTemp -= 0.05;}
   }
   abOld = abNew;        // Save new state
-  Blynk.virtualWrite(V40, setTemp);
+  haschanged = true;
 }
