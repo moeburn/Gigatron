@@ -101,6 +101,8 @@ void rainbow2() {
     startHue++;
     deltaHue++;
   }
+  leds[0] = CRGB(0, 0, 0);
+  FastLED.show();
 }
 
 void rainbow_wave(uint8_t thisSpeed, uint8_t deltaHue) {  // The fill_rainbow call doesn't support brightness levels.
