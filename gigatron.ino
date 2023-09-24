@@ -71,10 +71,10 @@ Average<float> t1avg(30);
 Average<float> t2avg(30);
 Average<float> h1avg(30);
 
-char auth[] = "xzOx2JrFeyFk7ea6zAZmHCzqBRC_ciuH";  //BLYNK
+char auth[] = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";  //BLYNK auth code removed for Github even though it's local anyway
 
-const char* ssid = "mikesnet";
-const char* password = "springchicken";
+const char* ssid = "xxxxxxxx"; //removed for Github even though you're probably not gonna hack into my wifi
+const char* password = "xxxxxxxxxxxx";
 
 const int oneWireBus = 33;
 OneWire oneWire(oneWireBus);
