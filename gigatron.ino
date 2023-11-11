@@ -19,7 +19,7 @@
 #include "time.h"
 
 const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = -14400;  //Replace with your GMT offset (secs)
+const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
 const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
 int hours, mins, secs;
 
@@ -71,10 +71,10 @@ Average<float> t1avg(30);
 Average<float> t2avg(30);
 Average<float> h1avg(30);
 
-char auth[] = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";  //BLYNK auth code removed for Github even though it's local anyway
+char auth[] = "xzOx2JrFeyFk7ea6zAZmHCzqBRC_ciuH";  //BLYNK
 
-const char* ssid = "xxxxxxxx"; //removed for Github even though you're probably not gonna hack into my wifi
-const char* password = "xxxxxxxxxxxx";
+const char* ssid = "mikesnet";
+const char* password = "springchicken";
 
 const int oneWireBus = 33;
 OneWire oneWire(oneWireBus);
@@ -211,72 +211,68 @@ void setup() {
   display.init();
   display.setFont(Monospaced_plain_8);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.drawStringMaxWidth(0, 0, 64, "Connectong to wifi...");
+  display.drawStringMaxWidth(0, 0, 64, "Connecting...");
   display.display();
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED && millis() < 15000) {
     delay(500);
     Serial.print(".");
   }
   display.clear();
-  Serial.println("");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-  Blynk.config(auth, IPAddress(192, 168, 50, 197), 8080);
-  Blynk.connect();
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("");
+    Serial.print("Connected to ");
+    Serial.println(ssid);
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+    Blynk.config(auth, IPAddress(192, 168, 50, 197), 8080);
+    Blynk.connect();
+    char buff[150];
+    CStringBuilder sb(buff, sizeof(buff));
+    sb.print(ssid);
+    sb.print(", ");
+    sb.print(WiFi.localIP());
+    display.drawStringMaxWidth(0, 0, 64, buff);
+    display.display();
+
+
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
+      request->send(200, "text/plain", "Hi! I am ESP32 Gigatrooon!");
+    });
+
+    AsyncElegantOTA.begin(&server);  // Start ElegantOTA
+    server.begin();
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    struct tm timeinfo;
+    getLocalTime(&timeinfo);
+    hours = timeinfo.tm_hour;
+    mins = timeinfo.tm_min;
+    secs = timeinfo.tm_sec;
+    terminal.println("**********Gigatron/Goliath/");
+    terminal.println("Smart Thermostat v1.2***********");
+
+    terminal.print("Connected to ");
+    terminal.println(ssid);
+    terminal.print("IP address: ");
+    terminal.println(WiFi.localIP());
+
+    printLocalTime();
+    terminal.flush();
+    Blynk.virtualWrite(V40, setTemp);
+  }
+  else {
+    display.drawStringMaxWidth(0, 0, 64, "ERR: NO WIFI.");
+    display.display();  
+  }
   sensors.begin();
   sensors.requestTemperatures();
-  char buff[150];
-  CStringBuilder sb(buff, sizeof(buff));
 
-  sb.print(ssid);
-  sb.print(", ");
-  sb.print(WiFi.localIP());
-
-
-  display.drawStringMaxWidth(0, 0, 64, buff);
-  display.display();
-
-
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
-    request->send(200, "text/plain", "Hi! I am ESP32 Gigatrooon!");
-  });
-
-  AsyncElegantOTA.begin(&server);  // Start ElegantOTA
-  server.begin();
-  Serial.println("HTTP server sharted");
-  delay(2000);
+  delay(1000);
   display.clear();
-
-  //analogReadResolution(11); // Default of 12 is not very linear. Recommended to use 10 or 11 depending on needed resolution.
-  //analogSetAttenuation(ADC_6db);
-  //dht.begin ();
-  //dhtTemp = dht.readTemperature();
-
-  // dhtHum = dht.readHumidity();
   sensors.requestTemperatures();
   temperatureC = sensors.getTempCByIndex(0);
   shtTemp = sht31.readTemperature();
   shtHum = sht31.readHumidity();
   shtTemp += tempOffset;
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  struct tm timeinfo;
-  getLocalTime(&timeinfo);
-  hours = timeinfo.tm_hour;
-  mins = timeinfo.tm_min;
-  secs = timeinfo.tm_sec;
-  terminal.println("**********Gigatron/Goliath/");
-  terminal.println("Smart Thermostat v1.0***********");
-
-  terminal.print("Connected to ");
-  terminal.println(ssid);
-  terminal.print("IP address: ");
-  terminal.println(WiFi.localIP());
-
-  printLocalTime();
-  terminal.flush();
-  Blynk.virtualWrite(V40, setTemp);
 }
 
 unsigned long millisBlynk, millisTemp;
@@ -330,6 +326,7 @@ void loop() {
   halfcount = count / 2;
 
   doDisplay();
+  
   if (buttoncounter >= 9) {
     partymode = true;
     rainbow2();
@@ -358,7 +355,7 @@ void loop() {
 
   FastLED.show();
 
-  Blynk.run();
+    if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
 
   currentState = digitalRead(pushbutton);
   // If the switch/button changed, due to noise or pressing:
@@ -395,6 +392,7 @@ void loop() {
     buttoncounter = 0;
     partymode = false;
       if (haschanged) {
+          if (WiFi.status() == WL_CONNECTED) {
     Blynk.virtualWrite(V40, setTemp);
     Blynk.virtualWrite(V5, setTemp);
     Blynk.virtualWrite(V41, ledValue);
@@ -402,16 +400,17 @@ void loop() {
   terminal.print(setTemp);
   terminal.print(" at ");
   printLocalTime();
-  terminal.flush();
+  terminal.flush();}
     haschanged = false;
        }
 
        if (haschanged2) {
-  terminal.print("> Temp set to ");
-  terminal.print(setTemp);
-  terminal.print(" at ");
-  printLocalTime();
-  terminal.flush();
+           if (WiFi.status() == WL_CONNECTED) {
+              terminal.print("> Temp set to ");
+              terminal.print(setTemp);
+              terminal.print(" at ");
+              printLocalTime();
+              terminal.flush();}
   haschanged2 = false;
        }
   }
@@ -425,19 +424,20 @@ void loop() {
     shtHum = sht31.readHumidity();
     absHum = (6.112 * pow(2.71828, ((17.67 * shtTemp) / (shtTemp + 243.5))) * shtHum * 2.1674) / (273.15 + shtTemp);
     shtTemp += tempOffset;
-    if ((shtTemp > 0) && (shtHum > 0)) {
-      //Blynk.virtualWrite(V1, dhtTemp);
-      //Blynk.virtualWrite(V3, humAvgHolder);
-      Blynk.virtualWrite(V7, shtTemp);
-      Blynk.virtualWrite(V8, shtHum);
-      Blynk.virtualWrite(V4, absHum);
-    }
+      if (WiFi.status() == WL_CONNECTED) {
+        if ((shtTemp > 0) && (shtHum > 0)) {
+          //Blynk.virtualWrite(V1, dhtTemp);
+          //Blynk.virtualWrite(V3, humAvgHolder);
+          Blynk.virtualWrite(V7, shtTemp);
+          Blynk.virtualWrite(V8, shtHum);
+          Blynk.virtualWrite(V4, absHum);
+        }
 
-    Blynk.virtualWrite(V2, temperatureC);
-    Blynk.virtualWrite(V5, setTemp);
-    Blynk.virtualWrite(V6, ssrState);
-        Blynk.virtualWrite(V40, setTemp);
-    Blynk.virtualWrite(V41, ledValue);
+        if (temperatureC > 0) {Blynk.virtualWrite(V2, temperatureC);}
+        Blynk.virtualWrite(V5, setTemp);
+        Blynk.virtualWrite(V6, ssrState);
+            Blynk.virtualWrite(V40, setTemp);
+        Blynk.virtualWrite(V41, ledValue);}
   }
 }
 
