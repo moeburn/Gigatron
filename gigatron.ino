@@ -17,15 +17,23 @@
 #include <FastLED.h>
 #include "Adafruit_SHT31.h"
 #include "time.h"
+#include <ESP32Time.h>
+
+//ESP32Time rtc;
+ESP32Time rtc(0);  // offset in seconds, use 0 because NTP already offset
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
 const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
 int hours, mins, secs;
+int chours, cmins, shours, smins, whours, wmins, whoursdouble, wminsdouble, shoursdouble, sminsdouble;
+bool isAwake = true;
+int page = 1;
 
 int ledValue;
 bool haschanged = false;
 bool haschanged2 = false;
+bool timechanged = false;
 
 
 
@@ -64,6 +72,8 @@ int halfcount;
 //DHT dht (pinDHT, DHT22);
 float dhtTemp, dhtHum, shtTemp, shtHum, temperatureC, absHum;
 float setTemp = 20.0;
+float waketemp = 20.0;
+float sleeptemp = 20.0;
 int encoder0Pos;
 float tempOffset = -1.5;
 
@@ -217,6 +227,10 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
+  if (WiFi.status() != WL_CONNECTED && millis() >= 15000) {
+    WiFi.disconnect();
+  }
+
   display.clear();
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("");
@@ -241,14 +255,16 @@ void setup() {
 
     AsyncElegantOTA.begin(&server);  // Start ElegantOTA
     server.begin();
+    delay(250);
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    delay(250);
     struct tm timeinfo;
     getLocalTime(&timeinfo);
     hours = timeinfo.tm_hour;
     mins = timeinfo.tm_min;
     secs = timeinfo.tm_sec;
     terminal.println("**********Gigatron/Goliath/");
-    terminal.println("Smart Thermostat v1.2***********");
+    terminal.println("Smart Thermostat v1.3***********");
 
     terminal.print("Connected to ");
     terminal.println(ssid);
@@ -278,7 +294,7 @@ void setup() {
 unsigned long millisBlynk, millisTemp;
 int buttoncounter;
 
-void doDisplay() {
+void page1() {
 
   char t1buff[150];
   CStringBuilder sbt1(t1buff, sizeof(t1buff));
@@ -290,47 +306,250 @@ void doDisplay() {
   sbt2.print(setTemp, 1);
   sbt2.print("°C");
 
-  /*char h1buff[150];
-      CStringBuilder sbh1(h1buff, sizeof(h1buff));
-      sbh1.print("H1: ");
-      sbh1.print(dhtHum);
-      sbh1.print(" %");*/
-  // write the buffer to the display
   display.clear();
-  if (buttonstate) {
-    display.drawCircle(60, 3, 3);
-    millisTemp = millis();
-    buttoncounter++;
-  }
-  //display.setTextAlignment(TEXT_ALIGN_LEFT);
-  //display.drawString(0, 0, "T:");
-  // display.drawString(0, 10, "Set: ");
+
   display.setFont(SansSerif_bold_16);
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.drawString(32, 0, t1buff);
   display.drawString(32, 24, t2buff);
   display.setFont(ArialMT_Plain_10);
   display.drawString(6, 38, "^");
-  //display.drawString(0, 20, h1buff);
-  
-  //display.drawRect(0, 0, 64, 48);
-  //display.drawString(0, 30, String(halfcount));
-  //display.setBrightness(halfcount);
   display.display();
 }
 
+void page2() {
+  display.clear();
+  display.setFont(Monospaced_plain_8);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
 
+  char tbuff[150];
+  CStringBuilder sbt1(tbuff, sizeof(tbuff));
+  if (WiFi.status() == WL_CONNECTED) {
+  display.drawString(1,1, "WiFi Time:");
+    struct tm timeinfo;
+    getLocalTime(&timeinfo);
+    hours = timeinfo.tm_hour;
+    mins = timeinfo.tm_min;
+    secs = timeinfo.tm_sec;
+    sbt1.print(hours, 1);
+    sbt1.print(":");
+    if (mins<10){
+    sbt1.print("0");  
+    }
+    sbt1.print(mins, 1);
+  }
+  else {
+  display.drawString(1,1, "Set hour:");
+    sbt1.print(hours, 1);
+    sbt1.print(":");
+    if (mins<10){
+    sbt1.print("0");  
+    }
+    sbt1.print(mins, 1);
+  display.setFont(SansSerif_bold_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(16, 29, "^");
+  }
+  display.setFont(SansSerif_bold_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(32, 12, tbuff);
+  display.display();
+}
+
+void page3() {
+  display.clear();
+  display.setFont(Monospaced_plain_8);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(1,1, "Set minute:");
+  char tbuff[150];
+  CStringBuilder sbt1(tbuff, sizeof(tbuff));
+  if (WiFi.status() == WL_CONNECTED) {
+    struct tm timeinfo;
+    getLocalTime(&timeinfo);
+    hours = timeinfo.tm_hour;
+    mins = timeinfo.tm_min;
+    secs = timeinfo.tm_sec;
+    sbt1.print(hours, 1);
+    sbt1.print(":");
+    if (mins<10){
+    sbt1.print("0");  
+    }
+    sbt1.print(mins, 1);
+  }
+  else {
+    sbt1.print(hours, 1);
+    sbt1.print(":");
+    if (mins<10){
+    sbt1.print("0");  
+    }
+    sbt1.print(mins, 1);
+  }
+  display.setFont(SansSerif_bold_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(32, 12, tbuff);
+  display.drawString(48, 29, "^");
+  display.display();
+}
+
+void page4() {
+  display.clear();
+  display.setFont(Monospaced_plain_8);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(1,1, "Wake hour:");
+  char tbuff[150];
+  CStringBuilder sbt1(tbuff, sizeof(tbuff));
+  sbt1.print(whours, 1);
+  sbt1.print(":");
+    if (wmins<10){
+    sbt1.print("0");  
+    }
+  sbt1.print(wmins, 1);
+  display.setFont(SansSerif_bold_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(32, 12, tbuff);
+  display.drawString(16, 29, "^");
+  display.display();
+}
+
+void page5() {
+  display.clear();
+  display.setFont(Monospaced_plain_8);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(1,1, "Wake min:");
+  char tbuff[150];
+  CStringBuilder sbt1(tbuff, sizeof(tbuff));
+  sbt1.print(whours, 1);
+  sbt1.print(":");
+    if (wmins<10){
+    sbt1.print("0");  
+    }
+  sbt1.print(wmins, 1);
+  display.setFont(SansSerif_bold_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(32, 12, tbuff);
+  display.drawString(48, 29, "^");
+  display.display();
+}
+
+void page6() {
+  display.clear();
+  display.setFont(Monospaced_plain_8);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(1,1, "Sleep hour:");
+  char tbuff[150];
+  CStringBuilder sbt1(tbuff, sizeof(tbuff));
+  sbt1.print(shours, 1);
+  sbt1.print(":");
+    if (smins<10){
+    sbt1.print("0");  
+    }
+  sbt1.print(smins, 1);
+  display.setFont(SansSerif_bold_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(32, 12, tbuff);
+  display.drawString(16, 29, "^");
+  display.display();
+}
+
+void page7() {
+  display.clear();
+  display.setFont(Monospaced_plain_8);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(1,1, "Sleep min:");
+  char tbuff[150];
+  CStringBuilder sbt1(tbuff, sizeof(tbuff));
+  sbt1.print(shours, 1);
+  sbt1.print(":");
+    if (smins<10){
+    sbt1.print("0");  
+    }
+  sbt1.print(smins, 1);
+  display.setFont(SansSerif_bold_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(32, 12, tbuff);
+  display.drawString(48, 29, "^");
+  display.display();
+}
+
+void page8() {
+  display.clear();
+  display.setFont(Monospaced_plain_8);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(1,1, "Wake temp:");
+  char tbuff[150];
+  CStringBuilder sbt1(tbuff, sizeof(tbuff));
+  sbt1.print(waketemp, 1);
+  sbt1.print("°C");
+  display.setFont(SansSerif_bold_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(32, 12, tbuff);
+  display.drawString(32, 29, "^");
+  display.display();
+}
+
+void page9() {
+  display.clear();
+  display.setFont(Monospaced_plain_8);
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.drawString(1,1, "Sleep temp:");
+  char tbuff[150];
+  CStringBuilder sbt1(tbuff, sizeof(tbuff));
+  sbt1.print(sleeptemp, 1);
+  sbt1.print("°C");
+  display.setFont(SansSerif_bold_16);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(32, 12, tbuff);
+  display.drawString(32, 29, "^");
+  display.display();
+}
 
 void loop() {
-  //leds[0] = CRGB(zebraR, zebraG, zebraB);
+  whours = whoursdouble / 2;
+  wmins = wminsdouble /2;
+  shours = shoursdouble /2;
+  smins = sminsdouble/2;
   halfcount = count / 2;
-
-  doDisplay();
-  
-  if (buttoncounter >= 9) {
-    partymode = true;
-    rainbow2();
+  if (buttonstate) {
+    display.drawCircle(60, 3, 3);
+    display.display();
   }
+  switch (page)
+    {
+      case 1:
+        page1();
+        break;
+      case 2:
+        page2();
+        break;
+      case 3:
+        page3();
+        break;
+      case 4:
+        page4();
+        break;
+      case 5:
+        page5();
+        break;
+      case 6:
+        page6();
+        break;
+      case 7:
+        page7();
+        break;
+      case 8:
+        page8();
+        break;
+      case 9:
+        page9();
+        break;
+    }
+
+ // if (buttoncounter >= 9) {
+ //   partymode = true;
+//    rainbow2();
+//  }
+
+
 
   //###############################################################################################
   //###############################################################################################
@@ -345,7 +564,7 @@ void loop() {
   if (shtTemp > (setTemp + hysteresis)) {
     ssrState = false;
     digitalWrite(pinSSR, LOW);
-    if (!partymode) { leds[0] = CRGB(0, 0, 0); }
+    leds[0] = CRGB(0, 0, 0); 
     ledValue = 0;
     //led1.off();
   }
@@ -356,6 +575,9 @@ void loop() {
   FastLED.show();
 
     if (WiFi.status() == WL_CONNECTED) {Blynk.run();}
+    else {
+
+      }
 
   currentState = digitalRead(pushbutton);
   // If the switch/button changed, due to noise or pressing:
@@ -366,13 +588,13 @@ void loop() {
     lastFlickerableState = currentState;
   }
   if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
-    // whatever the reading is at, it's been there for longer than the debounce
-    // delay, so take it as the actual current state:
-
     // if the button state has changed:
     if (lastSteadyState == HIGH && currentState == LOW) {
-      count = 0;
+      if ((WiFi.status() == WL_CONNECTED) && (page == 2)){page=4;}
+      else {
+      if (page < 9) {page++;} else {page=1;}                            //MAX PAGES GO HERE
       buttonstate = true;
+      }
     } else if (lastSteadyState == LOW && currentState == HIGH) {
       buttonstate = false;
     }
@@ -385,6 +607,19 @@ void loop() {
 
   if (millis() - millisTemp >= 10000)  //if it's been 30 seconds
   {
+    if (WiFi.status() == WL_CONNECTED) {
+      struct tm timeinfo;
+      getLocalTime(&timeinfo);
+      hours = timeinfo.tm_hour;
+      mins = timeinfo.tm_min;
+      secs = timeinfo.tm_sec;
+    }
+    else{
+      hours = rtc.getHour(true);
+      mins = rtc.getMinute();  
+      chours = hours*2;
+      cmins = mins*2;
+    }
     millisTemp = millis();
     shtTemp = sht31.readTemperature();
     shtHum = sht31.readHumidity();
@@ -392,27 +627,46 @@ void loop() {
     buttoncounter = 0;
     partymode = false;
       if (haschanged) {
-          if (WiFi.status() == WL_CONNECTED) {
-    Blynk.virtualWrite(V40, setTemp);
-    Blynk.virtualWrite(V5, setTemp);
-    Blynk.virtualWrite(V41, ledValue);
-      terminal.print("> Knob fiddled to ");
-  terminal.print(setTemp);
-  terminal.print(" at ");
-  printLocalTime();
-  terminal.flush();}
-    haschanged = false;
+        if (WiFi.status() == WL_CONNECTED) {
+          Blynk.virtualWrite(V40, setTemp);
+          Blynk.virtualWrite(V5, setTemp);
+          Blynk.virtualWrite(V41, ledValue);
+          terminal.print("> Knob fiddled to ");
+          terminal.print(setTemp);
+          terminal.print(" at ");
+          printLocalTime();
+          terminal.flush();
+        }
+        haschanged = false;
        }
 
-       if (haschanged2) {
+       if (haschanged2) { //If new Blynk temp setting
            if (WiFi.status() == WL_CONNECTED) {
               terminal.print("> Temp set to ");
               terminal.print(setTemp);
               terminal.print(" at ");
               printLocalTime();
-              terminal.flush();}
-  haschanged2 = false;
+              terminal.flush();
+              }
+         haschanged2 = false;
        }
+  }
+
+       if ((timechanged) && (WiFi.status() != WL_CONNECTED)) {
+          hours = chours / 2;
+          mins = cmins / 2;
+          rtc.setTime(0, mins, hours, 1, 1, 2023);
+          timechanged = false;
+       }
+
+  if (hours == whours && mins == wmins) {
+    isAwake = true;
+    setTemp = waketemp;
+  }
+
+  if (hours == shours && mins == smins) {
+    isAwake = false;
+    setTemp = sleeptemp;    
   }
 
   if (millis() - millisBlynk >= 30000)  //if it's been 30 seconds
@@ -452,10 +706,82 @@ void pinChangeISR() {
   if (criterion == 1 || criterion == 2) {
     if (upMask & (1 << (2 * abOld + abNew / 2))) {
       count++;
-      setTemp += 0.05;
+      switch (page)
+        {
+          case 1:
+            setTemp += 0.05;
+            break;
+          case 2:
+            if (WiFi.status() != WL_CONNECTED) {
+              if (chours < 46) {chours++;} else {chours=0;} //46/2 is 23
+              timechanged = true;
+            }
+            break;
+          case 3:
+            if (WiFi.status() != WL_CONNECTED) {
+              if (cmins < 118) {cmins++;} else {cmins=0;}
+              timechanged = true;
+            }
+            break;
+          case 4:
+              if (whoursdouble < 46) {whoursdouble++;} else {whoursdouble=0;}
+            break;
+          case 5:
+              if (wminsdouble < 118) {wminsdouble++;} else {wminsdouble=0;}
+            break;
+          case 6:
+              if (shoursdouble < 46) {shoursdouble++;} else {shoursdouble=0;}
+            break;
+          case 7:
+              if (sminsdouble < 118) {sminsdouble++;} else {sminsdouble=0;}
+            break;
+          case 8:
+            waketemp += 0.05;
+            break;
+          case 9:
+            sleeptemp += 0.05;
+            break;
+        }
+      
     } else {
       count--;  // upMask = ~downMask
-      setTemp -= 0.05;
+      switch (page)
+        {
+          case 1:
+            setTemp -= 0.05;
+            break;
+          case 2:
+            if (WiFi.status() != WL_CONNECTED) {
+              if (chours > 0) {chours--;} else {chours=46;}
+              timechanged = true;
+            }
+            break;
+          case 3:
+            if (WiFi.status() != WL_CONNECTED) {
+              if (cmins > 0) {cmins--;} else {cmins=118;}
+              timechanged = true;
+            }
+            break;
+          case 4:
+            if (whoursdouble > 0) {whoursdouble--;} else {whoursdouble=46;}
+            break;
+          case 5:
+              if (wminsdouble > 0) {wminsdouble--;} else {wminsdouble=118;}
+            break;
+          case 6:
+            if (shoursdouble > 0) {shoursdouble--;} else {shoursdouble=46;}
+            break;
+          case 7:
+              if (sminsdouble > 0) {sminsdouble--;} else {sminsdouble=118;}
+            break;
+          case 8:
+            waketemp -= 0.05;
+            break;
+          case 9:
+            sleeptemp -= 0.05;
+            break;
+        }
+
     }
   }
   abOld = abNew;  // Save new state
