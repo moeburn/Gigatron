@@ -284,6 +284,7 @@ void setup() {
 
   delay(1000);
   display.clear();
+  display.invertDisplay();
   sensors.requestTemperatures();
   temperatureC = sensors.getTempCByIndex(0);
   shtTemp = sht31.readTemperature();
@@ -291,7 +292,8 @@ void setup() {
   shtTemp += tempOffset;
 }
 
-unsigned long millisBlynk, millisTemp;
+unsigned long millisBlynk, millisTemp, millisPage;
+bool onwrongpage = false;
 int buttoncounter;
 
 void page1() {
@@ -310,10 +312,10 @@ void page1() {
 
   display.setFont(SansSerif_bold_16);
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.drawString(32, 0, t1buff);
-  display.drawString(32, 24, t2buff);
+  display.drawString(32, 4, t1buff);
+  display.drawString(32, 25, t2buff);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(6, 38, "^");
+  display.drawString(6, 39, "^");
   display.display();
 }
 
@@ -544,11 +546,16 @@ void loop() {
         break;
     }
 
- // if (buttoncounter >= 9) {
- //   partymode = true;
-//    rainbow2();
-//  }
+if ((page != 1) && (onwrongpage = false)) {
+  onwrongpage = true;
+  millisPage = millis();
+}
+else {onwrongpage = false;}
 
+if ((onwrongpage = true) && ((millis() - millisPage) > 10000)){
+  page = 1;
+  onwrongpage = false;
+}
 
 
   //###############################################################################################
@@ -592,7 +599,8 @@ void loop() {
     if (lastSteadyState == HIGH && currentState == LOW) {
       if ((WiFi.status() == WL_CONNECTED) && (page == 2)){page=4;}
       else {
-      if (page < 9) {page++;} else {page=1;}                            //MAX PAGES GO HERE
+      if (page < 9) {page++;} else {page=1;}                     //MAX PAGES GO HERE
+      millisPage = millis();
       buttonstate = true;
       }
     } else if (lastSteadyState == LOW && currentState == HIGH) {
@@ -659,12 +667,14 @@ void loop() {
           timechanged = false;
        }
 
-  if (hours == whours && mins == wmins) {
+  if (hours == whours && mins == wmins && page == 1) {
     isAwake = true;
+    display.invertDisplay();
     setTemp = waketemp;
   }
 
-  if (hours == shours && mins == smins) {
+  if (hours == shours && mins == smins && page == 1) {
+    display.normalDisplay();
     isAwake = false;
     setTemp = sleeptemp;    
   }
