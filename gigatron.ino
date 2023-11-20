@@ -72,8 +72,8 @@ int halfcount;
 //DHT dht (pinDHT, DHT22);
 float dhtTemp, dhtHum, shtTemp, shtHum, temperatureC, absHum;
 float setTemp = 20.0;
-float waketemp = 20.0;
-float sleeptemp = 20.0;
+float waketemp = 21.3;
+float sleeptemp = 19.0;
 int encoder0Pos;
 float tempOffset = -1.5;
 
@@ -203,6 +203,8 @@ void printLocalTime() {
 }
 
 void setup() {
+  whours = 5;
+  shours = 22;
   setCpuFrequencyMhz(80);
   FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
   sht31.begin(0x44);
@@ -221,6 +223,7 @@ void setup() {
   display.init();
   display.setFont(Monospaced_plain_8);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.setBrightness(100);
   display.drawStringMaxWidth(0, 0, 64, "Connecting...");
   display.display();
   while (WiFi.status() != WL_CONNECTED && millis() < 15000) {
@@ -600,9 +603,11 @@ if ((onwrongpage = true) && ((millis() - millisPage) > 10000)){
       if ((WiFi.status() == WL_CONNECTED) && (page == 2)){page=4;}
       else {
       if (page < 9) {page++;} else {page=1;}                     //MAX PAGES GO HERE
+      
+      
+      }
       millisPage = millis();
       buttonstate = true;
-      }
     } else if (lastSteadyState == LOW && currentState == HIGH) {
       buttonstate = false;
     }
