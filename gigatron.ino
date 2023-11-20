@@ -11,6 +11,10 @@
 #include <StreamLib.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <NonBlockingDallas.h>                  //Include the NonBlockingDallas library
+
+#define ONE_WIRE_BUS 33                          //PIN of the Maxim DS18B20 temperature sensor
+#define TIME_INTERVAL 1500      
 #include <BlynkSimpleEsp32.h>
 #include <Average.h>
 //#include "DHT.h"
@@ -88,7 +92,8 @@ const char* password = "springchicken";
 
 const int oneWireBus = 33;
 OneWire oneWire(oneWireBus);
-DallasTemperature sensors(&oneWire);
+DallasTemperature dallasTemp(&oneWire);
+NonBlockingDallas sensorDs18b20(&dallasTemp); 
 
 AsyncWebServer server(80);
 
@@ -157,8 +162,6 @@ BLYNK_WRITE(V0) {
     shtTemp = sht31.readTemperature();
     shtHum = sht31.readHumidity();
     shtTemp += tempOffset;
-    sensors.requestTemperatures();
-    temperatureC = sensors.getTempCByIndex(0);
     terminal.print("SHTTemp: ");
     terminal.print(shtTemp);
     terminal.print(", SHTHum: ");
@@ -282,14 +285,15 @@ void setup() {
     display.drawStringMaxWidth(0, 0, 64, "ERR: NO WIFI.");
     display.display();  
   }
-  sensors.begin();
-  sensors.requestTemperatures();
+
 
   delay(1000);
   display.clear();
   display.invertDisplay();
-  sensors.requestTemperatures();
-  temperatureC = sensors.getTempCByIndex(0);
+  sensorDs18b20.begin(NonBlockingDallas::resolution_12, NonBlockingDallas::unit_C, TIME_INTERVAL);
+
+  //Callbacks
+  sensorDs18b20.onTemperatureChange(handleTemperatureChange);
   shtTemp = sht31.readTemperature();
   shtHum = sht31.readHumidity();
   shtTemp += tempOffset;
@@ -508,7 +512,12 @@ void page9() {
   display.display();
 }
 
+void handleTemperatureChange(float temperature, bool valid, int deviceIndex){
+temperatureC = temperature;
+}
+
 void loop() {
+  sensorDs18b20.update();
   whours = whoursdouble / 2;
   wmins = wminsdouble /2;
   shours = shoursdouble /2;
@@ -687,8 +696,6 @@ if ((onwrongpage = true) && ((millis() - millisPage) > 10000)){
   if (millis() - millisBlynk >= 30000)  //if it's been 30 seconds
   {
     millisBlynk = millis();
-    sensors.requestTemperatures();
-    temperatureC = sensors.getTempCByIndex(0);
     shtTemp = sht31.readTemperature();
     shtHum = sht31.readHumidity();
     absHum = (6.112 * pow(2.71828, ((17.67 * shtTemp) / (shtTemp + 243.5))) * shtHum * 2.1674) / (273.15 + shtTemp);
