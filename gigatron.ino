@@ -14,7 +14,7 @@
 #include <NonBlockingDallas.h>                  //Include the NonBlockingDallas library
 
 #define ONE_WIRE_BUS 33                          //PIN of the Maxim DS18B20 temperature sensor
-#define TIME_INTERVAL 1500      
+#define TIME_INTERVAL 15000      
 #include <BlynkSimpleEsp32.h>
 #include <Average.h>
 //#include "DHT.h"
@@ -22,6 +22,9 @@
 #include "Adafruit_SHT31.h"
 #include "time.h"
 #include <ESP32Time.h>
+#include <Preferences.h>
+
+Preferences preferences;
 
 //ESP32Time rtc;
 ESP32Time rtc(0);  // offset in seconds, use 0 because NTP already offset
@@ -32,6 +35,7 @@ const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
 int hours, mins, secs;
 int chours, cmins, shours, smins, whours, wmins, whoursdouble, wminsdouble, shoursdouble, sminsdouble;
 bool isAwake = true;
+bool inverted = true;
 int page = 1;
 
 int ledValue;
@@ -140,6 +144,7 @@ BLYNK_WRITE(V0) {
     terminal.println("wifi");
     terminal.println("blink");
     terminal.println("temp");
+    terminal.println("invert");
     terminal.println("==End of list.==");
   }
   if (String("wifi") == param.asStr()) {
@@ -168,6 +173,23 @@ BLYNK_WRITE(V0) {
     terminal.print(shtHum);
     terminal.print("ProbeTemp: ");
     terminal.print(temperatureC);
+  }
+  if (String("invert") == param.asStr()) {
+    display.normalDisplay();
+    delay(1000);
+    display.invertDisplay();
+    delay(1000);
+    display.normalDisplay();
+    delay(1000);
+    display.invertDisplay();
+    delay(1000);
+    display.normalDisplay();
+    delay(1000);
+    display.invertDisplay();
+    delay(1000);
+    display.normalDisplay();
+    delay(1000);
+    display.invertDisplay();
   }
 
 
@@ -208,6 +230,25 @@ void printLocalTime() {
 void setup() {
   whours = 5;
   shours = 22;
+  
+  pinMode(19, INPUT_PULLUP);  //5, 15, 16, 17, 18 in use, disable rest
+  pinMode(14, INPUT_PULLUP);
+  pinMode(13, INPUT_PULLUP);
+  pinMode(12, INPUT_PULLUP);
+  for(int i=1; i<=4; i++) {
+    pinMode(i, INPUT_PULLUP);
+  }
+  pinMode(21, INPUT_PULLUP);
+  pinMode(22, INPUT_PULLUP);
+  pinMode(23, INPUT_PULLUP);
+  pinMode(25, INPUT_PULLUP);
+  pinMode(26, INPUT_PULLUP);
+  pinMode(27, INPUT_PULLUP);
+  for(int i=32; i<=36; i++) {
+    pinMode(i, INPUT_PULLUP);
+  }
+  pinMode(39, INPUT_PULLUP);
+
   setCpuFrequencyMhz(80);
   FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS);
   sht31.begin(0x44);
@@ -236,6 +277,20 @@ void setup() {
   if (WiFi.status() != WL_CONNECTED && millis() >= 15000) {
     WiFi.disconnect();
   }
+  preferences.begin("my-app", false);
+  whours = preferences.getInt("whours", 0);
+  wmins  = preferences.getInt("wmins", 0);
+  shours = preferences.getInt("shours", 0);
+  smins  = preferences.getInt("smins", 0);
+  waketemp = preferences.getFloat("waketemp", 0);
+  sleeptemp  = preferences.getFloat("sleeptemp", 0);
+  preferences.end();
+  whoursdouble = whours * 2;
+  wminsdouble = wmins * 2;
+  shoursdouble = shours * 2;
+  sminsdouble = smins * 2;
+  
+
 
   display.clear();
   if (WiFi.status() == WL_CONNECTED) {
@@ -269,6 +324,14 @@ void setup() {
     hours = timeinfo.tm_hour;
     mins = timeinfo.tm_min;
     secs = timeinfo.tm_sec;
+    if (hours > whours) {
+      isAwake = true;
+      setTemp = waketemp;
+    }
+    else {
+      isAwake = false;
+      setTemp = sleeptemp;    
+    }
     terminal.println("**********Gigatron/Goliath/");
     terminal.println("Smart Thermostat v1.3***********");
 
@@ -276,8 +339,10 @@ void setup() {
     terminal.println(ssid);
     terminal.print("IP address: ");
     terminal.println(WiFi.localIP());
-
+    String comma = ", ";
     printLocalTime();
+    terminal.println("Loaded values whours, wmins, shours, smins, waketemp, sleeptemp:");
+    terminal.println(whours + comma + wmins + comma + shours + comma + smins + comma + waketemp + comma + sleeptemp);  
     terminal.flush();
     Blynk.virtualWrite(V40, setTemp);
   }
@@ -659,6 +724,14 @@ if ((onwrongpage = true) && ((millis() - millisPage) > 10000)){
           printLocalTime();
           terminal.flush();
         }
+        preferences.begin("my-app", false);
+        preferences.putInt("whours", whours);
+        preferences.putInt("wmins", wmins);
+        preferences.putInt("shours", shours);
+        preferences.putInt("smins", smins);
+        preferences.putFloat("waketemp", waketemp);
+        preferences.putFloat("sleeptemp", sleeptemp);
+        preferences.end();
         haschanged = false;
        }
 
@@ -683,18 +756,17 @@ if ((onwrongpage = true) && ((millis() - millisPage) > 10000)){
 
   if (hours == whours && mins == wmins && page == 1) {
     isAwake = true;
-    display.invertDisplay();
     setTemp = waketemp;
   }
 
   if (hours == shours && mins == smins && page == 1) {
-    display.normalDisplay();
     isAwake = false;
     setTemp = sleeptemp;    
   }
 
   if (millis() - millisBlynk >= 30000)  //if it's been 30 seconds
   {
+    if (hours > 11) {display.invertDisplay();} else {display.normalDisplay();}
     millisBlynk = millis();
     shtTemp = sht31.readTemperature();
     shtHum = sht31.readHumidity();
@@ -735,27 +807,27 @@ void pinChangeISR() {
             break;
           case 2:
             if (WiFi.status() != WL_CONNECTED) {
-              if (chours < 46) {chours++;} else {chours=0;} //46/2 is 23
+              if (chours < 47) {chours++;} else if (chours > 46) {chours=0;} //46/2 is 23
               timechanged = true;
             }
             break;
           case 3:
             if (WiFi.status() != WL_CONNECTED) {
-              if (cmins < 118) {cmins++;} else {cmins=0;}
+              if (cmins < 119) {cmins++;} else {cmins=0;}
               timechanged = true;
             }
             break;
           case 4:
-              if (whoursdouble < 46) {whoursdouble++;} else {whoursdouble=0;}
+              whoursdouble++; if (whoursdouble > 47) {whoursdouble=0;}
             break;
           case 5:
-              if (wminsdouble < 118) {wminsdouble++;} else {wminsdouble=0;}
+              wminsdouble++; if (wminsdouble > 119)  {wminsdouble=0;}
             break;
           case 6:
-              if (shoursdouble < 46) {shoursdouble++;} else {shoursdouble=0;}
+              shoursdouble++; if (shoursdouble > 47) {shoursdouble=0;}
             break;
           case 7:
-              if (sminsdouble < 118) {sminsdouble++;} else {sminsdouble=0;}
+              sminsdouble++; if (sminsdouble > 119) {sminsdouble=0;}
             break;
           case 8:
             waketemp += 0.05;
@@ -785,16 +857,16 @@ void pinChangeISR() {
             }
             break;
           case 4:
-            if (whoursdouble > 0) {whoursdouble--;} else {whoursdouble=46;}
+            if (whoursdouble > 0) {whoursdouble--;} else {whoursdouble=47;}
             break;
           case 5:
-              if (wminsdouble > 0) {wminsdouble--;} else {wminsdouble=118;}
+              if (wminsdouble > 0) {wminsdouble--;} else {wminsdouble=119;}
             break;
           case 6:
-            if (shoursdouble > 0) {shoursdouble--;} else {shoursdouble=46;}
+            if (shoursdouble > 0) {shoursdouble--;} else {shoursdouble=47;}
             break;
           case 7:
-              if (sminsdouble > 0) {sminsdouble--;} else {sminsdouble=118;}
+              if (sminsdouble > 0) {sminsdouble--;} else {sminsdouble=119;}
             break;
           case 8:
             waketemp -= 0.05;
