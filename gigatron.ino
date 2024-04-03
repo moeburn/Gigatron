@@ -31,7 +31,7 @@ ESP32Time rtc(0);  // offset in seconds, use 0 because NTP already offset
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
-const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
+const int daylightOffset_sec = 3600;   //Replace with your daylight offset (secs)
 int hours, mins, secs;
 int chours, cmins, shours, smins, whours, wmins, whoursdouble, wminsdouble, shoursdouble, sminsdouble;
 bool isAwake = true;
@@ -145,6 +145,7 @@ BLYNK_WRITE(V0) {
     terminal.println("blink");
     terminal.println("temp");
     terminal.println("invert");
+    terminal.println("reset");
     terminal.println("==End of list.==");
   }
   if (String("wifi") == param.asStr()) {
@@ -191,7 +192,11 @@ BLYNK_WRITE(V0) {
     delay(1000);
     display.invertDisplay();
   }
-
+  if (String("reset") == param.asStr()) {
+    terminal.println("Restarting...");
+    terminal.flush();
+    ESP.restart();
+  }
 
 
 
