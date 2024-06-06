@@ -232,6 +232,24 @@ void printLocalTime() {
   terminal.flush();
 }
 
+void handleTemperatureChange(int deviceIndex, int32_t temperatureRAW){
+  temperatureC = sensorDs18b20.rawToCelsius(temperatureRAW);
+}
+
+void handleIntervalElapsed(int deviceIndex, int32_t temperatureRAW)
+{
+  temperatureC = sensorDs18b20.rawToCelsius(temperatureRAW);
+}
+
+void handleDeviceDisconnected(int deviceIndex)
+{
+  terminal.print(F("[NonBlockingDallas] handleDeviceDisconnected ==> deviceIndex="));
+  terminal.print(deviceIndex);
+  terminal.println(F(" disconnected."));
+  printLocalTime();
+  terminal.flush();
+}
+
 void setup() {
   whours = 5;
   shours = 22;
@@ -360,10 +378,10 @@ void setup() {
   delay(1000);
   display.clear();
   display.invertDisplay();
-  sensorDs18b20.begin(NonBlockingDallas::resolution_12, NonBlockingDallas::unit_C, TIME_INTERVAL);
-
-  //Callbacks
+  sensorDs18b20.begin(NonBlockingDallas::resolution_12, TIME_INTERVAL);
   sensorDs18b20.onTemperatureChange(handleTemperatureChange);
+  sensorDs18b20.onIntervalElapsed(handleIntervalElapsed);
+  sensorDs18b20.onDeviceDisconnected(handleDeviceDisconnected);
   shtTemp = sht31.readTemperature();
   shtHum = sht31.readHumidity();
   shtTemp += tempOffset;
@@ -582,9 +600,7 @@ void page9() {
   display.display();
 }
 
-void handleTemperatureChange(float temperature, bool valid, int deviceIndex){
-temperatureC = temperature;
-}
+
 
 void loop() {
   sensorDs18b20.update();
