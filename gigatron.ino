@@ -14,7 +14,7 @@
 #include <NonBlockingDallas.h>                  //Include the NonBlockingDallas library
 
 #define ONE_WIRE_BUS 33                          //PIN of the Maxim DS18B20 temperature sensor
-#define TIME_INTERVAL 15000      
+#define TIME_INTERVAL 4000      
 #include <BlynkSimpleEsp32.h>
 #include <Average.h>
 //#include "DHT.h"
@@ -223,12 +223,13 @@ BLYNK_WRITE(V16) {
   zebraB = param[2].asInt();
 }
 
-void printLocalTime() {
-  time_t rawtime;
-  struct tm* timeinfo;
-  time(&rawtime);
-  timeinfo = localtime(&rawtime);
-  terminal.println(asctime(timeinfo));
+void printLocalTime(){
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    terminal.println("Failed to obtain time 1");
+    return;
+  }
+  terminal.println(&timeinfo, "%A, %B %d %Y %H:%M:%S zone %Z %z ");
   terminal.flush();
 }
 
@@ -249,6 +250,28 @@ void handleDeviceDisconnected(int deviceIndex)
   printLocalTime();
   terminal.flush();
 }
+
+void setTimezone(String timezone){
+  Serial.printf("  Setting Timezone to %s\n",timezone.c_str());
+  setenv("TZ",timezone.c_str(),1);  //  Now adjust the TZ.  Clock settings are adjusted to show the new local time
+  tzset();
+}
+
+void initTime(String timezone){
+  struct tm timeinfo;
+
+  Serial.println("Setting up time");
+  configTime(0, 0, "pool.ntp.org");    // First connect to NTP server, with 0 TZ offset
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("  Failed to obtain time");
+    return;
+  }
+  Serial.println("  Got the time from NTP");
+  // Now we can set the real timezone
+  setTimezone(timezone);
+}
+
+
 
 void setup() {
   whours = 5;
@@ -300,6 +323,7 @@ void setup() {
   if (WiFi.status() != WL_CONNECTED && millis() >= 15000) {
     WiFi.disconnect();
   }
+  initTime("EST5EDT,M3.2.0,M11.1.0");
   preferences.begin("my-app", false);
   whours = preferences.getInt("whours", 0);
   wmins  = preferences.getInt("wmins", 0);
@@ -356,7 +380,7 @@ void setup() {
       setTemp = sleeptemp;    
     }
     terminal.println("**********Gigatron/Goliath/");
-    terminal.println("Smart Thermostat v1.3***********");
+    terminal.println("Smart Thermostat v1.4***********");
 
     terminal.print("Connected to ");
     terminal.println(ssid);
