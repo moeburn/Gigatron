@@ -83,7 +83,7 @@ float setTemp = 20.0;
 float waketemp = 21.3;
 float sleeptemp = 19.0;
 int encoder0Pos;
-float tempOffset = -1.5;
+float tempOffset = 0;
 
 Average<float> t1avg(30);
 Average<float> t2avg(30);
